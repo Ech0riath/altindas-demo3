@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /sepet/
+Disallow: /odeme/
+Disallow: /admin/
+
+Sitemap: https://altindasmuhendislik.com/sitemap-index.xml

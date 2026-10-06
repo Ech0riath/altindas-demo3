@@ -1,0 +1,116 @@
+# =============================================================================
+# Altindas Muhendislik & Elektrik - public_html/.htaccess (Hostinger / Apache + LiteSpeed)
+# Astro statik cikti (build.format: 'directory'): /a/ -> /a/index.html
+# /shop/ (ozel PHP magaza) bu dosyadan etkilenmemeli; ilgili yerlerde istisna var.
+# Test komutlari: icerik/yasal/301-test.md
+# =============================================================================
+
+# --- (g) Dizin indeksi ve dizin eksik-slash davranisi -------------------------
+# Astro "directory" formati: /hizmetler/ -> /hizmetler/index.html. /shop/ icin index.php kalir.
+DirectoryIndex index.html index.php
+Options -Indexes
+# /hizmetler -> /hizmetler/ (mod_dir) otomatik 301 verir; ayri kural yazilmaz.
+
+# --- (a) HTTPS ve www -> kok alan adi, tek adimda 301 -------------------------
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# www + http birlikte gelirse zincir olmasin: tek atlamada https://kok
+RewriteCond %{HTTP_HOST} ^www\.altindasmuhendislik\.com$ [NC,OR]
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^(.*)$ https://altindasmuhendislik.com/$1 [R=301,L]
+
+# Onbellek yardimcisi: /_astro/ dosyalari (karma adli) icin ortam degiskeni
+RewriteRule ^_astro/ - [E=ASTRO_ASSET:1]
+
+# Statik dosya/dizin yoksa ve /shop/ degilse ozel 404 (ErrorDocument da var; cakisma yok)
+# /shop/ altindaki PHP yonlendirmeleri kendi .htaccess dosyasina aittir.
+RewriteRule ^shop(/|$) - [L]
+</IfModule>
+
+# --- (b) Eski URL -> yeni URL 301 haritasi (CLAUDE.md bolum 3) ---------------
+# Hedefler mutlak ve son adrestir (zincir yok). Kaynak: Redirect 301 <eski yol> <yeni>
+Redirect 301 /sss.html https://altindasmuhendislik.com/bilgi/
+# KARAR BEKLIYOR: /enerji-hesaplayici.html (GES boyutlandirma araci; Caner'e sorulacak). Simdilik yonlendirme YOK.
+# Redirect 301 /enerji-hesaplayici.html https://altindasmuhendislik.com/araclar/reaktif-ceza-hesaplayici/
+# /shop/ Faz 1'de ayni adreste kalir: yonlendirme yok.
+Redirect 301 /projeler/ozdenizcilik.html https://altindasmuhendislik.com/projeler/ozdenizcilik-aluminyum-geri-donusum/
+Redirect 301 /projeler/nigsametal.html https://altindasmuhendislik.com/projeler/nigsa-metal-geri-donusum/
+Redirect 301 /projeler/demirkent.html https://altindasmuhendislik.com/projeler/demirkent-villa/
+Redirect 301 /projeler/dortmevsim.html https://altindasmuhendislik.com/projeler/dort-mevsim-konut-kooperatifi/
+Redirect 301 /gizlilik-politikasi.html https://altindasmuhendislik.com/kvkk-aydinlatma/
+Redirect 301 /mesafeli-satis-sozlesmesi.html https://altindasmuhendislik.com/mesafeli-satis-sozlesmesi/
+Redirect 301 /iade-kosullari.html https://altindasmuhendislik.com/iade-ve-cayma/
+# Ana sayfa capalari (#services, #projects, #contact) sunucuda yonlendirilemez; yeni bolumlerde
+# eski id'ler korunur. Logo ve favicon yollari ayni adreste kalir (/images/AltindasElektrikLogoBeyaz.png).
+
+# --- (c) Onbellek ---------------------------------------------------------------
+<IfModule mod_expires.c>
+ExpiresActive On
+ExpiresDefault "access plus 0 seconds"
+ExpiresByType image/avif "access plus 30 days"
+ExpiresByType image/webp "access plus 30 days"
+ExpiresByType image/png  "access plus 30 days"
+ExpiresByType image/jpeg "access plus 30 days"
+ExpiresByType image/svg+xml "access plus 30 days"
+ExpiresByType image/x-icon "access plus 30 days"
+</IfModule>
+
+<IfModule mod_headers.c>
+# Karma adli Astro dosyalari: 1 yil, degismez
+Header set Cache-Control "public, max-age=31536000, immutable" env=ASTRO_ASSET
+
+# HTML her seferinde dogrulanir (yayin aninda guncel gorunsun)
+<FilesMatch "\.(html|htm)$">
+  Header set Cache-Control "no-cache"
+</FilesMatch>
+
+# Gorseller 30 gun (dosya adi degismeden guncellenirse en gec 30 gunde gorunur)
+<FilesMatch "\.(avif|webp|png|jpe?g|svg|ico)$">
+  Header set Cache-Control "public, max-age=2592000"
+</FilesMatch>
+
+# Fontlar: karma adli, uzun omur
+<FilesMatch "\.(woff2?)$">
+  Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# --- (d) Guvenlik basliklari ---------------------------------------------------
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+# preload ancak tum alt alanlar HTTPS dogrulandiktan sonra eklenir.
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self)"
+Header always set X-Frame-Options "SAMEORIGIN"
+
+# CSP: yalniz Astro statik sayfalari icin. /shop/ ozel PHP kodu satir ici stil/betik ve iyzico
+# kullanabilir; Faz 3 denetiminde kendi kuralini alir, o yuzden burada disarida birakildi.
+<If "%{REQUEST_URI} !~ m#^/shop/#">
+  # script-src 'unsafe-inline': hero faz motifinin satir ici betigi icin. Faz 2'de nonce/hash'e gecis degerlendirilir.
+  # style-src 'unsafe-inline': Astro satir ici stil bloklari.
+  # Faz 3: iyzico Checkout Form icin script-src, frame-src, connect-src, form-action'a iyzico alanlari eklenir
+  #        (kesin alan adlari iyzico dokumanindan teyit edilecek).
+  # Faz 3: frame-src 'self' <iyzico alanlari>;
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+</If>
+</IfModule>
+
+# --- (e) Sikistirma ------------------------------------------------------------
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/xml application/json application/javascript text/javascript application/ld+json image/svg+xml application/manifest+json
+</IfModule>
+<IfModule mod_brotli.c>
+AddOutputFilterByType BROTLI_COMPRESS text/html text/css text/plain text/xml application/xml application/json application/javascript text/javascript application/ld+json image/svg+xml application/manifest+json
+</IfModule>
+# Hostinger LiteSpeed ise sunucu Brotli'yi kendi yonetir; yukaridaki bloklar zararsizdir.
+
+AddType application/manifest+json .webmanifest
+
+# --- (f) Ozel 404 --------------------------------------------------------------
+ErrorDocument 404 /404.html
+
+# --- Hassas dosyalar: sunucu tarafinda erisim kisitlamasi (robots.txt'e yol yazilmaz) ---
+<FilesMatch "^\.(?!well-known)|\.(env|log|bak|sql|ini)$|^config.*\.php$">
+  Require all denied
+</FilesMatch>
